@@ -1,0 +1,195 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout>
+  <main>
+    <h1>My Chat Web-App</h1>
+    <button class="btn-room" data-room="Room 1">Room 1</button>
+    <button class="btn-room" data-room="Room 2">Room 2</button>
+    <button class="btn-room" data-room="Room 3">Room 3</button>
+    <button class="btn-room" data-room="Leave Room">Leave Room</button>
+
+    <h3 id="room-heading"></h3>
+
+    <ul id="messages"></ul>
+  </main>
+
+  <form id="form">
+    <input
+      type="text"
+      id="username"
+      name="username"
+      placeholder="Enter your username"
+    />
+    <input
+      type="text"
+      id="message"
+      name="message"
+      placeholder="Type your message..."
+    />
+    <button type="submit">Send</button>
+  </form>
+  <style>
+    body {
+      font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        "Open Sans",
+        "Helvetica Neue",
+        sans-serif;
+      background: #f0f0f0;
+      display: grid;
+      place-content: center;
+      height: 100dvh;
+    }
+
+    main {
+      max-width: 450px;
+      /* max-width: 100%; */
+      height: 70vh;
+
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 8px;
+      margin-bottom: 16px;
+
+      overflow-x: auto;
+      scroll-behavior: smooth;
+    }
+
+    ul {
+      display: flex;
+      flex-direction: column;
+      list-style: none;
+      padding: 0;
+    }
+
+    li.message {
+      display: flex;
+      flex-direction: column;
+      border-radius: 4px;
+      padding: 4px 8px;
+      margin-top: 4px;
+    }
+
+    form {
+      display: flex;
+
+      input {
+        border-radius: 999999px;
+        flex-grow: 1;
+        border: 0;
+        padding: 8px;
+        margin-right: 8px;
+        border: 1px solid #ccc;
+      }
+    }
+    button {
+      background: #09f;
+      border: 0;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 8px;
+      transition: background 0.3s ease;
+
+      &:hover {
+        background: rgb(0, 104, 173);
+      }
+    }
+  </style>
+</Layout>
+
+<script type="module">
+  import { io } from "https://cdn.socket.io/4.8.1/socket.io.esm.min.js";
+  const socket = io("http://localhost:3500");
+  const inputUsername = document.querySelector("#username");
+  const inputMessage = document.querySelector("#message");
+  const roomButtons = document.querySelectorAll(".btn-room");
+  const roomHeading = document.querySelector("#room-heading");
+  let currentRoom = "";
+
+  roomButtons.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const roomName = btn.getAttribute("data-room");
+      const username = inputUsername.value || "Anonymous";
+
+      // Leave room
+      if (currentRoom) {
+        socket.emit("leave room", {
+          username,
+          room: currentRoom,
+        });
+      }
+
+      // Reset chat messages before loading new ones
+      const messages = document.querySelector("#messages");
+      messages.innerHTML = "";
+
+      // Join new room
+      currentRoom = roomName;
+      if (roomName == 'Leave Room') {
+        return console.log(roomName);
+      }
+      roomHeading.textContent = roomName;
+      socket.emit("join room", {
+        username,
+        room: currentRoom,
+      });
+
+      // Fetch and render past messages
+      const data = await getMessages(roomName);
+      console.log("data from click buttons", data);
+    });
+  });
+
+  const form = document.querySelector("#form");
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    if (currentRoom && inputMessage.value) {
+      socket.emit("sendMessage", {
+        username: inputUsername.value,
+        message: inputMessage.value,
+        room: currentRoom,
+      });
+    }
+    inputMessage.value = "";
+  });
+
+  socket.on("newMessage", (data) => {
+    const container = document.querySelector("main");
+    const messages = document.querySelector("#messages");
+    if (data.room === currentRoom) {
+      const li = document.createElement("li");
+      li.classList.add("message");
+      li.innerHTML = `<span style="${data.username === inputUsername.value ? "color: green" : "color: black"}">${data.username ?? "System"}:</span> ${data.message}`;
+      messages.appendChild(li);
+      container.scrollTop = container.scrollHeight;
+    }
+  });
+
+  const getMessages = async (room) => {
+    const res = await fetch(`http://localhost:3500/api/chat/${room}`);
+    const data = await res.json();
+    console.log(data);
+    data.forEach((message) => {
+      const messages = document.querySelector("#messages");
+      const li = document.createElement("li");
+      li.classList.add("message");
+      li.innerHTML = `<span style="${message.username === inputUsername.value ? "color: green" : "color: black"}">${message.username ?? "System"}:</span> ${message.message}`;
+      messages.appendChild(li);
+    });
+    return data;
+  };
+</script>
